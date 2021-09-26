@@ -18,6 +18,48 @@ defmodule GenReport do
     end)
   end
 
+  def build_many(filenames) when is_list(filenames) do
+    result =
+      filenames
+      |> Task.async_stream(&build/1)
+      |> Enum.reduce(reportacc(), fn {:ok, result}, report -> sum_reports(result, report) end)
+
+    {:ok, result}
+  end
+
+  def build_many(filenames) when not is_list(filenames) do
+    {:error, "Insira uma lista com os nomes de arquivos"}
+  end
+
+  def build_many, do: {:error, "Insira uma lista com os nomes de arquivos"}
+
+  defp sum_reports(
+         %{
+           "all_hours" => all_hours1,
+           "hours_per_month" => hours_per_month1,
+           "hours_per_year" => hours_per_year1
+         },
+         %{
+           "all_hours" => all_hours2,
+           "hours_per_month" => hours_per_month2,
+           "hours_per_year" => hours_per_year2
+         }
+       ) do
+    all_hours = merge_maps(all_hours1, all_hours2)
+    hours_per_month = deep_merge(hours_per_month1, hours_per_month2)
+    hours_per_year = deep_merge(hours_per_year1, hours_per_year2)
+
+    build_reports(all_hours, hours_per_month, hours_per_year)
+  end
+
+  defp deep_merge(m1, m2) do
+    Map.merge(m1, m2, fn _k, v1, v2 -> merge_maps(v1, v2) end)
+  end
+
+  defp merge_maps(m1, m2) do
+    Map.merge(m1, m2, fn _k, v1, v2 -> v1 + v2 end)
+  end
+
   defp sum_values([name, horas_tb_dia, _dia, mes, ano], report) do
     report
     |> sum_all_hours(name, horas_tb_dia)
@@ -55,8 +97,14 @@ defmodule GenReport do
     %{report | "hours_per_year" => map_hours_month_for_name}
   end
 
-  defp reportacc do
-    %{"all_hours" => %{}, "hours_per_month" => %{}, "hours_per_year" => %{}}
+  defp reportacc, do: build_reports(%{}, %{}, %{})
+
+  defp build_reports(all_hours, hours_per_month, hours_per_year) do
+    %{
+      "all_hours" => all_hours,
+      "hours_per_month" => hours_per_month,
+      "hours_per_year" => hours_per_year
+    }
   end
 
   defp defautl_map_months do
